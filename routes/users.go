@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 	"user-auth-service/db"
 
@@ -16,10 +17,13 @@ import (
 )
 
 var UsersCollection *mongo.Collection
+var mySigningKey []byte
 
 func init() {
 	var client = db.GetClient()
 	UsersCollection = client.Database("authDB").Collection("users")
+
+	mySigningKey = []byte(os.Getenv("SECRET_KEY"))
 }
 
 type User struct {
@@ -110,15 +114,18 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		// Create a new token object, specifying signing method and the claims
 		// you would like it to contain.
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"foo": "bar",
+			"iat": time.Now(),
+			"exp": time.Now().Add(10),
 			"nbf": time.Date(2015, 10, 10, 12, 0, 0, 0, time.UTC).Unix(),
 		})
 
-		mySigningKey := []byte("MySigningKey")
 		// Sign and get the complete encoded token as a string using the secret
 		tokenString, err := token.SignedString(mySigningKey)
 
 		log.Print(tokenString)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(tokenString))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -126,7 +133,44 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+}
 
+func TestToken(w http.ResponseWriter, r *http.Request) {
+	tokenString := r.Header.Get("Authorization")
+	valid := validateJwt(tokenString)
+	if valid {
+		log.Print("Token is VALID")
+
+	} else {
+		log.Print("Token is INVALID!!!")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+}
+
+func validateJwt(tokenString string) bool {
+	// Parse takes the token string and a function for looking up the key. The latter is especially
+	// useful if you use multiple keys for your application.  The standard is to use 'kid' in the
+	// head of the token to identify which key to use, but the parsed token (head and claims) is provided
+	// to the callback, providing flexibility.
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Don't forget to validate the alg is what you expect:
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+
+		// mySigningKey is a []byte containing your secret, e.g. []byte("my_secret_key")
+		return mySigningKey, nil
+	})
+
+	if _, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		log.Print("Token is VALID")
+		return true
+	}
+
+	log.Print("Token is INVALID!!!")
+	fmt.Println(err)
+	return false
 }
 
 // Compare the password with hash to check that input password is correct

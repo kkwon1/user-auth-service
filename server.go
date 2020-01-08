@@ -56,6 +56,7 @@ func main() {
 	api.HandleFunc("/users/", routes.CreateUser).Methods(http.MethodPost)
 	api.HandleFunc("/users/", routes.DeleteUser).Methods(http.MethodDelete)
 	api.HandleFunc("/users/login", routes.Login).Methods(http.MethodPost)
+	api.HandleFunc("/users/test", routes.TestToken).Methods(http.MethodPost)
 	api.HandleFunc("", notFound)
 
 	srv := &http.Server{
