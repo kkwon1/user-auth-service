@@ -108,18 +108,16 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	loginIsValid := comparePassword(retrievedUser.Password, u.Password)
+
 	if loginIsValid {
 		log.Print("Amazing! It's the correct password")
 
-		// Create a new token object, specifying signing method and the claims
-		// you would like it to contain.
+		// Creating a new JWT with 30 minute expiry time
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"iat": time.Now(),
-			"exp": time.Now().Add(10),
-			"nbf": time.Date(2015, 10, 10, 12, 0, 0, 0, time.UTC).Unix(),
+			"iat": time.Now().Unix(),
+			"exp": time.Now().Add(30 * time.Minute).Unix(),
 		})
 
-		// Sign and get the complete encoded token as a string using the secret
 		tokenString, err := token.SignedString(mySigningKey)
 
 		log.Print(tokenString)
@@ -149,12 +147,7 @@ func TestToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateJwt(tokenString string) bool {
-	// Parse takes the token string and a function for looking up the key. The latter is especially
-	// useful if you use multiple keys for your application.  The standard is to use 'kid' in the
-	// head of the token to identify which key to use, but the parsed token (head and claims) is provided
-	// to the callback, providing flexibility.
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Don't forget to validate the alg is what you expect:
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
